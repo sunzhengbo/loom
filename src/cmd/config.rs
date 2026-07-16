@@ -82,16 +82,17 @@ fn load_or_init(cli_root: Option<&str>) -> Result<Config> {
     if let Some(p) = cli_root {
         return Config::load(Some(std::path::Path::new(p)));
     }
-    Config::load(std::env::var("LOOM_CONFIG").ok().as_deref().map(std::path::Path::new))
+    Config::load(
+        std::env::var("LOOM_CONFIG")
+            .ok()
+            .as_deref()
+            .map(std::path::Path::new),
+    )
 }
 
 // ----- subcommand impls -----
 
-fn init(
-    force: bool,
-    node_path: Option<String>,
-    python_path: Option<String>,
-) -> Result<()> {
+fn init(force: bool, node_path: Option<String>, python_path: Option<String>) -> Result<()> {
     let exe = std::env::current_exe().context("locating loom.exe")?;
     let root = exe
         .parent()
@@ -178,7 +179,11 @@ dir = ""
     std::fs::write(&toml_path, content)
         .with_context(|| format!("writing {}", toml_path.display()))?;
 
-    println!("{} config written: {}", "ok".green().bold(), toml_path.display());
+    println!(
+        "{} config written: {}",
+        "ok".green().bold(),
+        toml_path.display()
+    );
     println!();
     println!("  loom root     {}", root.display());
     if let Some(p) = &detected_node {
@@ -304,7 +309,10 @@ fn confirm(prompt: &str) -> Result<bool> {
     std::io::stdout().flush().ok();
     let mut line = String::new();
     std::io::stdin().read_line(&mut line)?;
-    Ok(matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes"))
+    Ok(matches!(
+        line.trim().to_ascii_lowercase().as_str(),
+        "y" | "yes"
+    ))
 }
 
 // ----- dotted-path get / set -----
@@ -449,7 +457,11 @@ fn detect_real_executable(binary: &str) -> Option<PathBuf> {
             continue;
         }
         #[cfg(windows)]
-        let candidates = [format!("{binary}.exe"), format!("{binary}.cmd"), binary.to_string()];
+        let candidates = [
+            format!("{binary}.exe"),
+            format!("{binary}.cmd"),
+            binary.to_string(),
+        ];
         #[cfg(not(windows))]
         let candidates = [binary.to_string()];
         for c in candidates {

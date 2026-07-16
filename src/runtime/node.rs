@@ -183,8 +183,8 @@ impl<'a> Runtime for NodeRuntime<'a> {
             return Ok(vec![]);
         }
         let mut out = Vec::new();
-        for entry in std::fs::read_dir(&bin)
-            .with_context(|| format!("reading {}", bin.display()))?
+        for entry in
+            std::fs::read_dir(&bin).with_context(|| format!("reading {}", bin.display()))?
         {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();

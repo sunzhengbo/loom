@@ -39,8 +39,7 @@ impl<'a> PythonRuntime<'a> {
         }
         // Fallback: walk PATH ourselves (avoids relying on `which` crate's
         // Windows quirks).
-        let path = std::env::var_os("PATH")
-            .ok_or_else(|| anyhow::anyhow!("PATH is not set"))?;
+        let path = std::env::var_os("PATH").ok_or_else(|| anyhow::anyhow!("PATH is not set"))?;
         for dir in std::env::split_paths(&path) {
             for name in ["python.exe", "python"] {
                 let candidate = dir.join(name);
@@ -83,13 +82,15 @@ impl<'a> PythonRuntime<'a> {
         self.ensure_project()?;
         let py = self.base_python()?;
         if dry_run {
-            println!("[dry-run] {} -m venv {}", py.display(), self.venv_path().display());
+            println!(
+                "[dry-run] {} -m venv {}",
+                py.display(),
+                self.venv_path().display()
+            );
             return Ok(());
         }
         let mut cmd = Command::new(&py);
-        cmd.arg("-m")
-            .arg("venv")
-            .arg(&self.venv_path());
+        cmd.arg("-m").arg("venv").arg(&self.venv_path());
         self.apply_proxy(&mut cmd);
         let status = cmd
             .status()
@@ -217,32 +218,48 @@ impl<'a> Runtime for PythonRuntime<'a> {
     }
 
     fn list(&self) -> Result<Vec<String>> {
-        if !self.venv_path().exists() {
+        let bin = self.bin_dir();
+        if !bin.exists() {
             return Ok(vec![]);
         }
-        let mut cmd = self.pip()?;
-        cmd.arg("list");
-        let output = cmd
-            .output()
-            .with_context(|| format!("spawning {:?}", cmd.get_program()))?;
-        if !output.status.success() {
-            bail!(
-                "pip list failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+        let mut out = Vec::new();
+        for entry in
+            std::fs::read_dir(&bin).with_context(|| format!("reading {}", bin.display()))?
+        {
+            let entry = entry?;
+            if !entry.path().is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            let stem = name
+                .strip_suffix(".cmd")
+                .or_else(|| name.strip_suffix(".ps1"))
+                .or_else(|| name.strip_suffix(".bat"))
+                .or_else(|| name.strip_suffix(".exe"))
+                .unwrap_or(&name)
+                .to_string();
+            if stem.is_empty() {
+                continue;
+            }
+            #[cfg(windows)]
+            if stem == name {
+                continue;
+            }
+            if self.should_auto_shim(&stem) {
+                out.push(stem);
+            }
         }
-        let s = String::from_utf8_lossy(&output.stdout);
-        let names: Vec<String> = s
-            .lines()
-            .filter_map(|line| line.split_whitespace().next().map(|s| s.to_string()))
-            .filter(|n| n != "Package" && !n.is_empty())
-            .collect();
-        Ok(names)
+        out.sort();
+        out.dedup();
+        Ok(out)
     }
 
     fn status(&self) -> Result<String> {
         if !self.venv_path().exists() {
-            return Ok(format!("venv not initialized: {}", self.venv_path().display()));
+            return Ok(format!(
+                "venv not initialized: {}",
+                self.venv_path().display()
+            ));
         }
         let mut cmd = self.pip()?;
         cmd.arg("list").arg("--outdated");
@@ -357,7 +374,10 @@ impl<'a> Runtime for PythonRuntime<'a> {
             }
             return Ok(());
         }
-        println!("reinstalling {} packages against current Python…", pkgs.len());
+        println!(
+            "reinstalling {} packages against current Python…",
+            pkgs.len()
+        );
         self.run_status(cmd)
     }
 

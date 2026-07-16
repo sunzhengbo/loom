@@ -105,9 +105,7 @@ pub struct ShimsConfig {
 
 impl Default for ShimsConfig {
     fn default() -> Self {
-        Self {
-            dir: String::new(),
-        }
+        Self { dir: String::new() }
     }
 }
 
@@ -250,7 +248,9 @@ impl Config {
 
     /// Resolved root (always Some — guaranteed by `load`).
     pub fn root(&self) -> &PathBuf {
-        self.root.as_ref().expect("Config::load ensures root is set")
+        self.root
+            .as_ref()
+            .expect("Config::load ensures root is set")
     }
 
     /// Absolute path to the Node project directory.
@@ -344,7 +344,8 @@ fn find_loom_root() -> Option<PathBuf> {
 #[allow(dead_code)]
 pub fn ensure_dir(p: &Path) -> Result<()> {
     if !p.exists() {
-        std::fs::create_dir_all(p).with_context(|| format!("creating directory: {}", p.display()))?;
+        std::fs::create_dir_all(p)
+            .with_context(|| format!("creating directory: {}", p.display()))?;
     }
     Ok(())
 }

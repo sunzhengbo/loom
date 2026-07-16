@@ -41,11 +41,7 @@ pub fn add(rt: &dyn Runtime, name: &str) -> Result<()> {
     let source = std::env::current_exe().context("locating loom.exe")?;
     create_hard_link(&source, &target)
         .with_context(|| format!("creating shim hard link: {}", target.display()))?;
-    println!(
-        "{} shim created: {}",
-        "ok".green().bold(),
-        target.display()
-    );
+    println!("{} shim created: {}", "ok".green().bold(), target.display());
     Ok(())
 }
 
@@ -57,8 +53,7 @@ pub fn remove(cfg: &Config, name: &str) -> Result<()> {
     if !p.exists() {
         bail!("no shim named `{}` found in {}", name, dir.display());
     }
-    std::fs::remove_file(&p)
-        .with_context(|| format!("removing shim: {}", p.display()))?;
+    std::fs::remove_file(&p).with_context(|| format!("removing shim: {}", p.display()))?;
     println!("{} shim removed: {}", "ok".yellow().bold(), p.display());
     Ok(())
 }
@@ -72,12 +67,10 @@ pub fn list(cfg: &Config) -> Result<()> {
         println!("(no shims)");
         return Ok(());
     }
-    for entry in std::fs::read_dir(&dir)
-        .with_context(|| format!("reading {}", dir.display()))?
-    {
+    for entry in std::fs::read_dir(&dir).with_context(|| format!("reading {}", dir.display()))? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
-        if name == "loom.exe" {
+        if name == "loom.exe" || name == "loom" {
             continue;
         }
         if is_shim_file(&name) {
@@ -128,7 +121,7 @@ pub fn auto_shim_binaries(rt: &dyn Runtime) -> Result<()> {
     let source = std::env::current_exe().context("locating loom.exe")?;
     let entries: Vec<_> = std::fs::read_dir(&bin_dir)
         .with_context(|| format!("reading {}", bin_dir.display()))?
-        .filter_map(|e| e.ok())
+        .filter_map(|e| e.ok().filter(|entry| entry.path().is_file()))
         .collect();
     let mut created = 0usize;
     for entry in entries {
@@ -139,10 +132,15 @@ pub fn auto_shim_binaries(rt: &dyn Runtime) -> Result<()> {
         let stem = name
             .strip_suffix(".cmd")
             .or_else(|| name.strip_suffix(".ps1"))
+            .or_else(|| name.strip_suffix(".bat"))
             .or_else(|| name.strip_suffix(".exe"))
             .unwrap_or(&name)
             .to_string();
-        if stem.is_empty() || stem == name {
+        if stem.is_empty() {
+            continue;
+        }
+        #[cfg(windows)]
+        if stem == name {
             continue;
         }
         if !rt.should_auto_shim(&stem) {
@@ -213,14 +211,18 @@ pub fn cleanup_orphan_shims(rt: &dyn Runtime, bin_dirs: &[std::path::PathBuf]) -
         if !bin_dir.exists() {
             continue;
         }
-        for entry in std::fs::read_dir(bin_dir)
-            .with_context(|| format!("reading {}", bin_dir.display()))?
+        for entry in
+            std::fs::read_dir(bin_dir).with_context(|| format!("reading {}", bin_dir.display()))?
         {
             let entry = entry?;
+            if !entry.path().is_file() {
+                continue;
+            }
             let name = entry.file_name().to_string_lossy().to_string();
             let stem = name
                 .strip_suffix(".cmd")
                 .or_else(|| name.strip_suffix(".ps1"))
+                .or_else(|| name.strip_suffix(".bat"))
                 .or_else(|| name.strip_suffix(".exe"))
                 .unwrap_or(&name)
                 .to_string();
@@ -231,21 +233,21 @@ pub fn cleanup_orphan_shims(rt: &dyn Runtime, bin_dirs: &[std::path::PathBuf]) -
     }
 
     let mut removed = 0usize;
-    for entry in std::fs::read_dir(&shims_dir)
-        .with_context(|| format!("reading {}", shims_dir.display()))?
+    for entry in
+        std::fs::read_dir(&shims_dir).with_context(|| format!("reading {}", shims_dir.display()))?
     {
         let entry = entry?;
+        if !entry.path().is_file() {
+            continue;
+        }
         let name = entry.file_name().to_string_lossy().to_string();
         // Shims now live alongside loom.exe — the dir also contains
         // nodeapp/, pythonapp/, tools/, loom.toml, etc. Skip anything
         // that isn't a shim-shaped .exe file.
-        if !is_shim_file(&name) || name == "loom.exe" {
+        if !is_shim_file(&name) || name == "loom.exe" || name == "loom" {
             continue;
         }
-        let stem = name
-            .strip_suffix(".exe")
-            .unwrap_or(&name)
-            .to_string();
+        let stem = name.strip_suffix(".exe").unwrap_or(&name).to_string();
         if stem.is_empty() {
             continue;
         }
@@ -260,11 +262,7 @@ pub fn cleanup_orphan_shims(rt: &dyn Runtime, bin_dirs: &[std::path::PathBuf]) -
         }
         match std::fs::remove_file(entry.path()) {
             Ok(()) => {
-                println!(
-                    "{} shim removed: {}",
-                    "ok".yellow(),
-                    entry.path().display()
-                );
+                println!("{} shim removed: {}", "ok".yellow(), entry.path().display());
                 removed += 1;
             }
             Err(e) => {

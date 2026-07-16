@@ -5,17 +5,11 @@ use colored::*;
 pub fn run(cfg: &Config) -> Result<()> {
     println!("{}", "Loom configuration".bold());
     println!();
-    println!(
-        "  {:<14} {}",
-        "root".cyan(),
-        root_label(cfg).bright_black()
-    );
+    println!("  {:<14} {}", "root".cyan(), root_label(cfg).bright_black());
     println!(
         "  {:<14} {}",
         "proxy".cyan(),
-        cfg.proxy_url
-            .as_deref()
-            .unwrap_or("(from environment)")
+        cfg.proxy_url.as_deref().unwrap_or("(from environment)")
     );
     println!();
     println!("  {}", "node".green().bold());

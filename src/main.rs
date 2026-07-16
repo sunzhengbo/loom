@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 use colored::*;
-use anyhow::Context;
 
 mod cmd;
 mod config;
@@ -138,17 +137,15 @@ fn main() {
 
     let shim_invocation = if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
-            let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+            let canon =
+                |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
             let name = exe.file_stem().and_then(|s| s.to_str()).map(String::from);
             let args: Vec<String> = std::env::args().skip(1).collect();
             // Shims and loom.exe share the same directory by default
             // (both live in <root>/), so the parent check alone is not
             // enough. The filename disambiguates: loom.exe is the
             // manager, anything else is a shim.
-            let is_loom_itself = exe
-                .file_name()
-                .map(|n| n == "loom.exe")
-                .unwrap_or(false);
+            let is_loom_itself = exe.file_stem().map(|s| s == "loom").unwrap_or(false);
             if canon(parent) == canon(&cfg.shims_dir()) && !is_loom_itself {
                 name.map(|n| ShimInvocation { name: n, args })
             } else {
@@ -227,7 +224,9 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             let rt = runtime::node::NodeRuntime::new(&cfg);
             match cmd {
                 NodeCmd::Install { packages } => cmd::install::run(&rt, &packages, cli.dry_run)?,
-                NodeCmd::Uninstall { packages } => cmd::uninstall::run(&rt, &packages, cli.dry_run)?,
+                NodeCmd::Uninstall { packages } => {
+                    cmd::uninstall::run(&rt, &packages, cli.dry_run)?
+                }
                 NodeCmd::List => cmd::list::run(&rt)?,
                 NodeCmd::Status => cmd::status::run(&rt)?,
                 NodeCmd::Upgrade { packages, force } => {
